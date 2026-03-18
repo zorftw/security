@@ -103,3 +103,40 @@ Set the script to allow execution:
 Then proceed to execute with new path variable
 `PATH=/tmp/evilpython:$PATH ./level3`
 Win (execute `escalate`).
+
+# Level 4
+
+Looking at the code, the generated password is stored on the stack (allocated within function call)
+We can simply read the password off of the stack (there are 3 stack buffers @ 32, so we need to drop the next 96 bytes)
+
+1. Open in `dbg ./level4`
+2. Run until prompted
+3. Exit to dbg (Cntrl C)
+4. `backtrace` and look into the frame with the `main()` call
+5. Dump rsp (stack ptr) `x/96c $rsp`
+6. Read the dump (this iteration:)
+```
+0x7fffffffe210: 78 'N'  80 'P'  57 '9'  76 'L'  110 'n' 88 'X'  70 'F'  110 'n'
+0x7fffffffe218: 67 'C'  70 'F'  107 'k' 110 'n' 48 '0'  69 'E'  87 'W'  72 'H'
+0x7fffffffe220: 49 '1'  53 '5'  119 'w' 118 'v' 75 'K'  71 'G'  122 'z' 74 'J'
+0x7fffffffe228: 103 'g' 107 'k' 50 '2'  90 'Z'  82 'R'  50 '2'  104 'h' 0 '\000'
+```
+
+so the password generated is `NP9LnXFnCFkn0EWH15wvKGzJgk2zR2h`
+
+One problem: DBG ignores the bit flag. The address seems to be consistent for now (0x7fffffffe210 in multiple runs)
+so we should just run it and attach gdb.
+```
+./level4 & PID=$!; sleep 0.1; dd if=/proc/$PID/mem bs=1 skip=$((0x7fffffffe210)) count=32 2>/dev/null; wait $PID
+```
+
+Okay, does not seem to work because of priveleges. Therefore, we need to predict.
+
+Compile a predictor (by copying the code)
+Run this command:
+`PASS=$(/tmp/predictor) && (echo "a"; echo "$PASS"; sleep 0.2; echo "/bin/bash ./usr/local/bin/escalate")`
+
+Win!
+
+# Level 5 
+Boom
