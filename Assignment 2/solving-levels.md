@@ -508,18 +508,19 @@ Looking at the ASM for main
 ```
 
 Looking at the ASM and the source code at execution time our stack will look similar to this:
+```
 ┌─────────────────────────────┐  <--- rsp
 │                             │  rbp-0x38 │
 │        char name[16]        │           │ 16 bytes
 │                             │  rbp-0x30 │
 ├─────────────────────────────┤
-│      int input number       │  rbp-0x28 │ 8 bytes
+│      int input number       │  rbp-0x28 │ 4 bytes
 ├─────────────────────────────┤
-│           int x             │  rbp-0x20 │ 8 bytes
+│           int x             │  rbp-0x20 │ 4 bytes
 ├─────────────────────────────┤
-│           int y             │  rbp-0x18 │ 8 bytes
+│           int y             │  rbp-0x18 │ 4 bytes
 ├─────────────────────────────┤
-│         int final           │  rbp-0x10 │ 8 bytes
+│         int final           │  rbp-0x10 │ 4 bytes
 ├─────────────────────────────┤
 │    ptr to special value     │  rbp-0x8  │ 8 bytes
 ├─────────────────────────────┤
@@ -527,6 +528,7 @@ Looking at the ASM and the source code at execution time our stack will look sim
 ├─────────────────────────────┤
 │         saved RIP           │  rbp+0x8  │ 8 bytes
 └─────────────────────────────┘
+```
 
 Debugging further, we can set a breakpoint during our comparison call
 ```
@@ -577,4 +579,5 @@ result:
 Permanently added students24 to group level7, congratulations!
 /!\ Remember to log in again to reload your groups. /!\
 ```
+PS: I wrote down an integer is 8 bytes- obviously it is 4.
 
